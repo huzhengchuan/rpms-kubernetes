@@ -1,72 +1,78 @@
 %if 0%{?fedora}
-%global with_devel 1
-%global with_bundled 1
-%global with_debug 1
+%global with_devel   1
+%global with_bundled 0
+%global with_debug   1
 %else
-%global with_devel 0
+%global with_devel   0
 %global with_bundled 1
-%global with_debug 0
+%global with_debug   0
 %endif
 
 %if 0%{?with_debug}
 # https://bugzilla.redhat.com/show_bug.cgi?id=995136#c12
 %global _dwz_low_mem_die_limit 0
 %else
-%global debug_package   %{nil}
+%global debug_package %{nil}
 %endif
-%global provider        github
-%global provider_tld    com
-%global project	        kubernetes
-%global repo            kubernetes
+
+%global provider                github
+%global provider_tld            com
+%global project                 kubernetes
+%global repo                    kubernetes
 # https://github.com/kubernetes/kubernetes
-%global provider_prefix	%{provider}.%{provider_tld}/%{project}/%{repo}
-%global import_path     k8s.io/kubernetes
-%global commit		92b4f971662de9d8770f8dcd2ee01ec226a6f6c0
-%global shortcommit	%(c=%{commit}; echo ${c:0:7})
 
-%global con_provider        github
-%global con_provider_tld    com
-%global con_project         kubernetes
-%global con_repo            contrib
+%global provider_prefix         %{provider}.%{provider_tld}/%{project}/%{repo}
+%global import_path             k8s.io/kubernetes
+%global commit       b4c624f7fbb0ba2baa7ce4bd9cfabb4a85945cdb
+%global shortcommit              %(c=%{commit}; echo ${c:0:7})
+
+%global con_provider            github
+%global con_provider_tld        com
+%global con_project             kubernetes
+%global con_repo                contrib
 # https://github.com/kubernetes/contrib
-%global con_provider_prefix %{con_provider}.%{con_provider_tld}/%{con_project}/%{con_repo}
-%global con_commit      17c9a8df1be43378b0026dc22f6000a3e9952a18
-%global con_shortcommit %(c=%{con_commit}; echo ${c:0:7})
+%global con_provider_prefix     %{con_provider}.%{con_provider_tld}/%{con_project}/%{con_repo}
+%global con_commit      18c4217169a3caeea5c2f6e3f7007342462ed98c
+%global con_shortcommit         %(c=%{con_commit}; echo ${c:0:7})
 
-%global kube_version          1.4.7
-%global kube_git_version      v%{kube_version}
+%global kube_version          1.6.4
+%global kube_git_version        v%{kube_version}
 
-#I really need this, otherwise "version_ldflags=$(kube::version_ldflags)"
-# does not work
-%global _buildshell	/bin/bash
-%global _checkshell	/bin/bash
+# Needed otherwise "version_ldflags=$(kube::version_ldflags)" doesn't work
+%global _buildshell  /bin/bash
+%global _checkshell  /bin/bash
 
-Name:		kubernetes
-Version:	%{kube_version}
-Release:	1%{?dist}
+##############################################
+Name:           kubernetes
+Version:        %{kube_version}
+Release:        1%{?dist}
 Summary:        Container cluster management
 License:        ASL 2.0
-URL:            %{import_path}
-ExclusiveArch:  x86_64 aarch64 ppc64le
+URL:            https://%{import_path}
+ExclusiveArch:  x86_64 aarch64 ppc64le s390x
 Source0:        https://%{provider_prefix}/archive/%{commit}/%{repo}-%{shortcommit}.tar.gz
 Source1:        https://%{con_provider_prefix}/archive/%{con_commit}/%{con_repo}-%{con_shortcommit}.tar.gz
 Source3:        kubernetes-accounting.conf
+Source4:        kubeadm.conf
 
 Source33:       genmanpages.sh
-Patch2:         Change-etcd-server-port.patch
-Patch3:         build-with-debug-info.patch
 
-Patch4:         make-test-cmd-run-over-hyperkube-based-kubectl.patch
-Patch5:         make-e2e_node-run-over-distro-bins.patch
+#Patch2:         Change-etcd-server-port.patch
+Patch3:         build-with-debug-info.patch
+#Patch4:         make-test-cmd-run-over-hyperkube-based-kubectl.patch
+#Patch5:         make-e2e_node-run-over-distro-bins.patch
 
 # Drop apiserver command from hyperkube as apiserver has different permisions and capabilities
 # Add kube-prefix for controller-manager, proxy and scheduler
-Patch12:        remove-apiserver-add-kube-prefix-for-hyperkube.patch
-
-Patch17:        Hyperkube-remove-federation-cmds.patch
+Patch12:        remove-apiserver-add-kube-prefix-for-hyperkube-remov.patch
 
 # ppc64le
 Patch16:        fix-support-for-ppc64le.patch
+
+# resolves: bz1413997
+Patch19:        fix-rootScopeNaming-generate-selfLink-issue-37686.patch
+
+Patch20:        use_go_build-is-not-fully-propagated-so-make-it-fixe.patch
 
 # It obsoletes cadvisor but needs its source code (literally integrated)
 Obsoletes:      cadvisor
@@ -769,6 +775,7 @@ This package contains library source intended for
 building other packages which use %{project}/%{repo}.
 %endif
 
+##############################################
 %package unit-test
 Summary: %{summary} - for running unit tests
 
@@ -782,6 +789,7 @@ Requires: NetworkManager
 %description unit-test
 %{summary} - for running unit tests
 
+##############################################
 %package master
 Summary: Kubernetes services for master host
 
@@ -801,6 +809,7 @@ Conflicts: kubernetes-node > %{version}-%{release}
 %description master
 Kubernetes services for master host
 
+##############################################
 %package node
 Summary: Kubernetes services for node host
 
@@ -814,8 +823,8 @@ BuildRequires: go-md2man
 BuildRequires: go-bindata
 
 Requires(pre): shadow-utils
-Requires: socat
-Requires: kubernetes-client = %{version}-%{release}
+Requires:      socat
+Requires:      kubernetes-client = %{version}-%{release}
 
 # if master is installed with node, version and release must be the same
 Conflicts: kubernetes-master < %{version}-%{release}
@@ -824,6 +833,16 @@ Conflicts: kubernetes-master > %{version}-%{release}
 %description node
 Kubernetes services for node host
 
+##############################################
+%package  kubeadm
+Summary:  Kubernetes tool for standing up clusters
+Requires: kubernetes-node = %{version}-%{release}
+Requires: containernetworking-cni
+
+%description kubeadm
+Kubernetes tool for standing up clusters
+
+##############################################
 %package client
 Summary: Kubernetes client tools
 
@@ -833,6 +852,8 @@ BuildRequires: go-bindata
 %description client
 Kubernetes client tools like kubectl
 
+##############################################
+
 %prep
 %setup -q -n %{con_repo}-%{con_commit} -T -b 1
 %setup -q -n %{repo}-%{commit}
@@ -841,10 +862,13 @@ Kubernetes client tools like kubectl
 %patch3 -p1
 %endif
 
+%patch20 -p1
+
 # copy contrib folder
+mkdir contrib
 cp -r ../%{con_repo}-%{con_commit}/init contrib/.
 
-%patch2 -p1
+#%patch2 -p1
 
 # Drop apiserver from hyperkube
 %patch12 -p1
@@ -852,27 +876,30 @@ cp -r ../%{con_repo}-%{con_commit}/init contrib/.
 #src/k8s.io/kubernetes/pkg/util/certificates
 # Patch the code to remove eliptic.P224 support
 for dir in vendor/github.com/google/certificate-transparency/go/x509 pkg/util/certificates; do
-	if [ -d "${dir}" ]; then
-		pushd ${dir}
-		sed -i "/^[^=]*$/ s/oidNamedCurveP224/oidNamedCurveP256/g" *.go
-		sed -i "/^[^=]*$/ s/elliptic\.P224/elliptic.P256/g" *.go
-		popd
-	fi
+  if [ -d "${dir}" ]; then
+    pushd ${dir}
+    sed -i "/^[^=]*$/ s/oidNamedCurveP224/oidNamedCurveP256/g" *.go
+    sed -i "/^[^=]*$/ s/elliptic\.P224/elliptic.P256/g" *.go
+    popd
+  fi
 done
-
-%ifarch ppc64le
-%patch16 -p1
-%endif
 
 # Move all the code under src/k8s.io/kubernetes directory
 mkdir -p src/k8s.io/kubernetes
 mv $(ls | grep -v "^src$") src/k8s.io/kubernetes/.
 
-%patch17 -p1
-
 # Patch tests to be run over distro bins
-%patch4 -p1
-%patch5 -p1
+#patch4 -p1
+#patch5 -p1
+
+%ifarch ppc64le
+%patch16 -p1
+%endif
+
+%patch19 -p1
+
+rm src/k8s.io/kubernetes/cluster/gce/gci/mounter/mounter
+###############
 
 %build
 pushd src/k8s.io/kubernetes/
@@ -885,9 +912,10 @@ export KUBE_EXTRA_GOPATH=$(pwd)/Godeps/_workspace
 %ifarch ppc64le
 export GOLDFLAGS='-linkmode=external'
 %endif
-make WHAT="--use_go_build cmd/hyperkube cmd/kube-apiserver"
+make WHAT="--use_go_build cmd/hyperkube cmd/kube-apiserver cmd/kubeadm"
 
 # convert md to man
+./hack/generate-docs.sh || true
 pushd docs
 pushd admin
 cp kube-apiserver.md kube-controller-manager.md kube-proxy.md kube-scheduler.md kubelet.md ..
@@ -903,7 +931,7 @@ pushd src/k8s.io/kubernetes/
 kube::golang::setup_env
 
 %ifarch ppc64le
-output_path="${KUBE_OUTPUT_BINPATH}"
+output_path="_output/local/go/bin"
 %else
 output_path="${KUBE_OUTPUT_BINPATH}/$(kube::golang::current_platform)"
 %endif
@@ -915,6 +943,11 @@ install -p -m 755 -t %{buildroot}%{_bindir} ${output_path}/hyperkube
 
 echo "+++ INSTALLING kube-apiserver"
 install -p -m 754 -t %{buildroot}%{_bindir} ${output_path}/kube-apiserver
+
+echo "+++ INSTALLING kubeadm"
+install -p -m 755 -t %{buildroot}%{_bindir} ${output_path}/kubeadm
+install -d -m 0755 %{buildroot}/%{_sysconfdir}/systemd/system/kubelet.service.d
+install -p -m 0644 -t %{buildroot}/%{_sysconfdir}/systemd/system/kubelet.service.d %{SOURCE4}
 
 binaries=(kube-controller-manager kube-scheduler kube-proxy kubelet kubectl)
 for bin in "${binaries[@]}"; do
@@ -1009,9 +1042,11 @@ fi
 #define license tag if not already defined
 %{!?_licensedir:%global license %doc}
 
+##############################################
 %files
 # empty as it depends on master and node
 
+##############################################
 %files master
 %license LICENSE
 %doc *.md
@@ -1033,6 +1068,7 @@ fi
 %{_tmpfilesdir}/kubernetes.conf
 %verify(not size mtime md5) %attr(755, kube,kube) %dir /run/%{name}
 
+##############################################
 %files node
 %license LICENSE
 %doc *.md
@@ -1052,6 +1088,16 @@ fi
 %{_tmpfilesdir}/kubernetes.conf
 %verify(not size mtime md5) %attr(755, kube,kube) %dir /run/%{name}
 
+##############################################
+%files kubeadm
+%license LICENSE
+%doc *.md
+# TODO: needs man page
+%{_bindir}/kubeadm
+%dir %{_sysconfdir}/systemd/system/kubelet.service.d
+%config(noreplace) %{_sysconfdir}/systemd/system/kubelet.service.d/kubeadm.conf
+
+##############################################
 %files client
 %license LICENSE
 %doc *.md
@@ -1061,6 +1107,7 @@ fi
 %{_bindir}/hyperkube
 %{_datadir}/bash-completion/completions/kubectl
 
+##############################################
 %files unit-test
 %{_sharedstatedir}/kubernetes-unit-test/
 
@@ -1069,6 +1116,8 @@ fi
 %doc *.md
 %dir %{gopath}/src/k8s.io
 %endif
+
+##############################################
 
 %pre master
 getent group kube >/dev/null || groupadd -r kube
@@ -1103,7 +1152,70 @@ fi
 %postun node
 %systemd_postun
 
+############################################
 %changelog
+* Fri May 19 2017 Timothy St. Clair <tstclair@heptio.com> - 1.6.4-1
+- Add kubeadm subpackage to enable upstream deployments
+
+* Thu May 18 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.6.3-1
+- Update to upstream v1.6.3
+  resolves: #1452101
+
+* Fri May 12 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.6.2-2
+- Extend archs with s390x
+  resolves: #1400000
+
+* Tue May 02 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.6.2-1
+- Update to upstream v1.6.2
+  resolves: #1447338
+
+* Tue Apr 11 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.6.1-1
+- Update to upstream v1.6.1
+  related: #1422889
+
+* Fri Mar 31 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.5.6-1
+- Update to upstream v1.5.6
+  related: #1422889
+
+* Mon Mar 27 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.5.5-4
+- Update to upstream v1.5.5
+  related: #1422889
+
+* Mon Mar 27 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.5.4-3
+- re-enable debug-info
+  related: #1422889
+
+* Thu Mar 09 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.5.4-2
+- Bump to upstream 7243c69eb523aa4377bce883e7c0dd76b84709a1
+  related: #1422889
+
+* Thu Feb 16 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.5.3-1
+- Update to upstream v1.5.3
+  resolves: #1422889
+
+* Fri Feb 10 2017 Fedora Release Engineering <releng@fedoraproject.org> - 1.5.2-3
+- Rebuilt for https://fedoraproject.org/wiki/Fedora_26_Mass_Rebuild
+
+* Wed Jan 18 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.5.2-2
+- fix rootScopeNaming generate selfLink
+  resolves: #1413997
+
+* Fri Jan 13 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.5.2-1
+- Bump version as well
+  related: #1412996
+
+* Fri Jan 13 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.5.1-2
+- Bump to upstream 1.5.2
+  resolves: #1412996
+
+* Thu Jan 05 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.5.1-1
+- Bump to upstream 1.5.1
+  resolves: #1410186
+
+* Wed Jan 04 2017 Jan Chaloupka <jchaloup@redhat.com> - 1.4.7-2
+- Generate the md files before they are converted to man pages
+  resolves: #1409943
+
 * Mon Dec 12 2016 Jan Chaloupka <jchaloup@redhat.com> - 1.4.7-1
 - Bump to upstream v1.4.7
   resolves: #1403823
