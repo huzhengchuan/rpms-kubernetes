@@ -813,7 +813,7 @@ Kubernetes services for master host
 %package node
 Summary: Kubernetes services for node host
 
-Requires: docker
+Requires: docker-latest
 Requires: conntrack-tools
 
 BuildRequires: golang >= 1.2-7
@@ -1142,7 +1142,7 @@ getent passwd kube >/dev/null || useradd -r -g kube -d / -s /sbin/nologin \
 %post node
 %systemd_post kubelet kube-proxy
 # If accounting is not currently enabled systemd reexec
-if [[ `systemctl show docker kubelet | grep -q -e CPUAccounting=no -e MemoryAccounting=no; echo $?` -eq 0 ]]; then
+if [[ `systemctl show docker-latest kubelet | grep -q -e CPUAccounting=no -e MemoryAccounting=no; echo $?` -eq 0 ]]; then
   systemctl daemon-reexec
 fi
 
